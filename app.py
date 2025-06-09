@@ -66,20 +66,35 @@ with st.sidebar.form("formulario_mov"):
     ativo = st.text_input("Código do Ativo (ex: VOO, PETR4)", max_chars=10)
     tipo = st.selectbox("Tipo", ['Ação', 'FII', 'ETF', 'STOCK', 'BDR', 'REITS', 'Renda Fixa', 'Cripto'])
     carteira = st.selectbox("Carteira", ['Lucas', 'Pais', 'Outros'])
-    qtde = st.number_input("Quantidade", min_value=0.01, step=0.01)
+
+    # Verificar posição atual do ativo na carteira selecionada
+    movs_temp = st.session_state['movimentacoes']
+    filtro = (movs_temp['Ativo'].str.upper() == ativo.upper()) & (movs_temp['Carteira'] == carteira)
+    posicao_atual = movs_temp.loc[filtro, 'Qtde.'].sum() if not movs_temp.empty else 0
+
+    zerar = False
+    if operacao == 'Venda' and ativo:
+        zerar = st.checkbox(f"Zerar posição atual ({posicao_atual:.2f} unidades)")
+
+    qtde = posicao_atual if zerar else st.number_input("Quantidade", min_value=0.01, step=0.01)
     preco = st.number_input("Preço unitário", min_value=0.0, step=0.01)
     submitted = st.form_submit_button("Adicionar")
 
     if submitted and ativo:
-        total = qtde * preco * (-1 if operacao == 'Venda' else 1)
-        nova = pd.DataFrame([{
-            'Data': pd.to_datetime(data), 'Operação': operacao, 'Ativo': ativo.upper(), 'Tipo': tipo,
-            'Carteira': carteira, 'Qtde.': qtde * (1 if operacao == 'Compra' else -1),
-            'Preço Unit.': preco, 'Total R$': total
-        }])
-        st.session_state['movimentacoes'] = pd.concat([st.session_state['movimentacoes'], nova], ignore_index=True)
-        st.session_state['movimentacoes'].to_csv(ARQUIVO_MOV, index=False)
-        st.success(f"{operacao} de {qtde} {ativo.upper()} registrada!")
+        sinal = 1 if operacao == 'Compra' else -1
+
+        if operacao == 'Venda' and not zerar and qtde > posicao_atual:
+            st.error(f"Quantidade de venda ({qtde}) maior que a posição atual ({posicao_atual})")
+        else:
+            total = qtde * preco * sinal
+            nova = pd.DataFrame([{
+                'Data': pd.to_datetime(data), 'Operação': operacao, 'Ativo': ativo.upper(), 'Tipo': tipo,
+                'Carteira': carteira, 'Qtde.': qtde * sinal,
+                'Preço Unit.': preco, 'Total R$': total
+            }])
+            st.session_state['movimentacoes'] = pd.concat([st.session_state['movimentacoes'], nova], ignore_index=True)
+            st.session_state['movimentacoes'].to_csv(ARQUIVO_MOV, index=False)
+            st.success(f"{operacao} de {qtde} {ativo.upper()} registrada!")
 
 movs = st.session_state['movimentacoes']
 
