@@ -87,8 +87,8 @@ if not movs.empty:
     st.subheader("📋 Histórico de Movimentações")
     st.dataframe(movs.sort_values(by='Data', ascending=False), use_container_width=True)
 
-    # Cálculo de posição atual
-    posicao = movs.groupby(['Ativo', 'Tipo', 'Carteira']).agg({
+    # Cálculo de posição atual (agora agrupado apenas por Ativo e Tipo)
+    posicao = movs.groupby(['Ativo', 'Tipo']).agg({
         'Qtde.': 'sum',
         'Total R$': 'sum'
     }).reset_index()
@@ -136,7 +136,7 @@ if not movs.empty:
         except:
             return ""
 
-    styled = posicao[['Ativo', 'Tipo', 'Carteira', 'Moeda', 'Qtde.', 'Preço Médio', 'Cotação Atual',
+    styled = posicao[['Ativo', 'Tipo', 'Moeda', 'Qtde.', 'Preço Médio', 'Cotação Atual',
                       'Val. Atual (BRL)', 'Lucro (BRL)', 'Rentabilidade (%)']].style \
         .format({
             'Rentabilidade (%)': '{:.2f}%'
