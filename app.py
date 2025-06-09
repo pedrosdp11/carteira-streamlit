@@ -1,4 +1,4 @@
-# 📊 Controle de Carteira com Streamlit - v6 (proteção por senha)
+# 📊 Controle de Carteira com Streamlit - v7 (tabs e agrupamento por moeda)
 
 import streamlit as st
 import pandas as pd
@@ -81,76 +81,80 @@ with st.sidebar.form("formulario_mov"):
         st.session_state['movimentacoes'].to_csv(ARQUIVO_MOV, index=False)
         st.success(f"{operacao} de {qtde} {ativo.upper()} registrada!")
 
-# Mostrar movimentações
 movs = st.session_state['movimentacoes']
-if not movs.empty:
-    st.subheader("📋 Histórico de Movimentações")
-    st.dataframe(movs.sort_values(by='Data', ascending=False), use_container_width=True)
 
-    # Cálculo de posição atual (agora agrupado apenas por Ativo e Tipo)
-    posicao = movs.groupby(['Ativo', 'Tipo']).agg({
-        'Qtde.': 'sum',
-        'Total R$': 'sum'
-    }).reset_index()
-    posicao = posicao[posicao['Qtde.'] > 0]
-    posicao['Preço Médio'] = posicao['Total R$'] / posicao['Qtde.']
-    posicao['Moeda'] = posicao['Tipo'].apply(detectar_moeda)
+aba1, aba2 = st.tabs(["📊 Posição Atual", "📋 Histórico de Movimentações"])
 
-    # Buscar cotações atuais
-    cotacoes = {}
-    for ativo in posicao['Ativo'].unique():
-        try:
-            ticker = yf.Ticker(ativo)
-            preco_mercado = ticker.history(period='1d')['Close'].iloc[-1]
-            cotacoes[ativo] = preco_mercado
-        except:
-            cotacoes[ativo] = None
+with aba1:
+    if not movs.empty:
+        # Cálculo de posição atual
+        posicao = movs.groupby(['Ativo', 'Tipo']).agg({
+            'Qtde.': 'sum',
+            'Total R$': 'sum'
+        }).reset_index()
+        posicao = posicao[posicao['Qtde.'] > 0]
+        posicao['Preço Médio'] = posicao['Total R$'] / posicao['Qtde.']
+        posicao['Moeda'] = posicao['Tipo'].apply(detectar_moeda)
 
-    posicao['Cotação Atual'] = posicao['Ativo'].map(cotacoes)
+        # Buscar cotações atuais
+        cotacoes = {}
+        for ativo in posicao['Ativo'].unique():
+            try:
+                ticker = yf.Ticker(ativo)
+                preco_mercado = ticker.history(period='1d')['Close'].iloc[-1]
+                cotacoes[ativo] = preco_mercado
+            except:
+                cotacoes[ativo] = None
 
-    # Valor atual em moeda original e BRL
-    posicao['Val. Atual (moeda)'] = posicao['Cotação Atual'] * posicao['Qtde.']
-    posicao['Val. Atual (BRL)'] = posicao.apply(
-        lambda row: row['Val. Atual (moeda)'] * dolar if row['Moeda'] == 'USD' else row['Val. Atual (moeda)'], axis=1)
-    posicao['Investido (BRL)'] = posicao.apply(
-        lambda row: row['Preço Médio'] * row['Qtde.'] * dolar if row['Moeda'] == 'USD' else row['Preço Médio'] * row['Qtde.'], axis=1)
-    posicao['Lucro (BRL)'] = posicao['Val. Atual (BRL)'] - posicao['Investido (BRL)']
-    posicao['Rentabilidade (%)'] = (posicao['Lucro (BRL)'] / posicao['Investido (BRL)']) * 100
+        posicao['Cotação Atual'] = posicao['Ativo'].map(cotacoes)
+        posicao['Val. Atual (moeda)'] = posicao['Cotação Atual'] * posicao['Qtde.']
+        posicao['Val. Atual (BRL)'] = posicao.apply(
+            lambda row: row['Val. Atual (moeda)'] * dolar if row['Moeda'] == 'USD' else row['Val. Atual (moeda)'], axis=1)
+        posicao['Investido (BRL)'] = posicao.apply(
+            lambda row: row['Preço Médio'] * row['Qtde.'] * dolar if row['Moeda'] == 'USD' else row['Preço Médio'] * row['Qtde.'], axis=1)
+        posicao['Lucro (BRL)'] = posicao['Val. Atual (BRL)'] - posicao['Investido (BRL)']
+        posicao['Rentabilidade (%)'] = (posicao['Lucro (BRL)'] / posicao['Investido (BRL)']) * 100
 
-    # Formatação de colunas
-    def format_moeda(valor, moeda):
-        if pd.isna(valor): return '-'
-        simbolo = 'US$' if moeda == 'USD' else 'R$'
-        return f"{simbolo} {valor:,.2f}"
+        # Formatação de colunas
+        def format_moeda(valor, moeda):
+            if pd.isna(valor): return '-'
+            simbolo = 'US$' if moeda == 'USD' else 'R$'
+            return f"{simbolo} {valor:,.2f}"
 
-    posicao['ValFormat'] = posicao['Val. Atual (BRL)']  # manter valor bruto para gráficos
-    posicao['Val. Atual (BRL)'] = posicao['Val. Atual (BRL)'].map(lambda v: f"R$ {v:,.2f}")
-    posicao['Lucro (BRL)'] = posicao['Lucro (BRL)'].map(lambda v: f"R$ {v:,.2f}")
-    posicao['Preço Médio'] = posicao.apply(lambda row: format_moeda(row['Preço Médio'], row['Moeda']), axis=1)
-    posicao['Cotação Atual'] = posicao.apply(lambda row: format_moeda(row['Cotação Atual'], row['Moeda']), axis=1)
+        posicao['ValFormat'] = posicao['Val. Atual (BRL)']  # manter valor bruto para gráficos
+        posicao['Val. Atual (BRL)'] = posicao['Val. Atual (BRL)'].map(lambda v: f"R$ {v:,.2f}")
+        posicao['Lucro (BRL)'] = posicao['Lucro (BRL)'].map(lambda v: f"R$ {v:,.2f}")
+        posicao['Preço Médio'] = posicao.apply(lambda row: format_moeda(row['Preço Médio'], row['Moeda']), axis=1)
+        posicao['Cotação Atual'] = posicao.apply(lambda row: format_moeda(row['Cotação Atual'], row['Moeda']), axis=1)
 
-    # Aplicar estilo à rentabilidade
-    def cor_rentabilidade(val):
-        try:
-            return f"color: {'green' if val > 0 else 'red'}"
-        except:
-            return ""
+        def cor_rentabilidade(val):
+            try:
+                return f"color: {'green' if val > 0 else 'red'}"
+            except:
+                return ""
 
-    styled = posicao[['Ativo', 'Tipo', 'Moeda', 'Qtde.', 'Preço Médio', 'Cotação Atual',
-                      'Val. Atual (BRL)', 'Lucro (BRL)', 'Rentabilidade (%)']].style \
-        .format({
-            'Rentabilidade (%)': '{:.2f}%'
-        }).applymap(cor_rentabilidade, subset=['Rentabilidade (%)'])
+        # Agrupar por moeda e ordenar por ativo
+        for moeda in ['BRL', 'USD']:
+            df_m = posicao[posicao['Moeda'] == moeda].sort_values('Ativo')
+            if not df_m.empty:
+                st.subheader(f"💼 Ativos em {'Reais' if moeda == 'BRL' else 'Dólar'}")
+                styled = df_m[['Ativo', 'Tipo', 'Moeda', 'Qtde.', 'Preço Médio', 'Cotação Atual',
+                               'Val. Atual (BRL)', 'Lucro (BRL)', 'Rentabilidade (%)']].style \
+                    .format({'Rentabilidade (%)': '{:.2f}%'}) \
+                    .applymap(cor_rentabilidade, subset=['Rentabilidade (%)'])
+                st.dataframe(styled, use_container_width=True)
 
-    st.subheader("📊 Posição Atual por Ativo")
-    st.dataframe(styled, use_container_width=True)
+        st.subheader("📌 Distribuição por Tipo de Ativo")
+        tipo_group = posicao.groupby('Tipo')['ValFormat'].sum()
+        fig1, ax1 = plt.subplots()
+        tipo_group.plot.pie(autopct='%1.1f%%', ax=ax1)
+        ax1.set_ylabel('')
+        st.pyplot(fig1)
 
-    st.subheader("📌 Distribuição por Tipo de Ativo")
-    tipo_group = posicao.groupby('Tipo')['ValFormat'].sum()
-    fig1, ax1 = plt.subplots()
-    tipo_group.plot.pie(autopct='%1.1f%%', ax=ax1)
-    ax1.set_ylabel('')
-    st.pyplot(fig1)
+with aba2:
+    if not movs.empty:
+        st.subheader("📋 Histórico de Movimentações")
+        st.dataframe(movs.sort_values(by='Data', ascending=False), use_container_width=True)
 
 # Botão para limpar tudo
 if st.sidebar.button("🗑️ Limpar movimentações"):
