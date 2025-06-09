@@ -123,6 +123,7 @@ if not movs.empty:
         simbolo = 'US$' if moeda == 'USD' else 'R$'
         return f"{simbolo} {valor:,.2f}"
 
+    posicao['ValFormat'] = posicao['Val. Atual (BRL)']  # manter valor bruto para gráficos
     posicao['Val. Atual (BRL)'] = posicao['Val. Atual (BRL)'].map(lambda v: f"R$ {v:,.2f}")
     posicao['Lucro (BRL)'] = posicao['Lucro (BRL)'].map(lambda v: f"R$ {v:,.2f}")
     posicao['Preço Médio'] = posicao.apply(lambda row: format_moeda(row['Preço Médio'], row['Moeda']), axis=1)
@@ -145,8 +146,7 @@ if not movs.empty:
     st.dataframe(styled, use_container_width=True)
 
     st.subheader("📌 Distribuição por Tipo de Ativo")
-    tipo_group = posicao.groupby('Tipo')['Val. Atual (BRL)'].sum()
-    tipo_group = tipo_group.replace('[R$\s]', '', regex=True).astype(float)
+    tipo_group = posicao.groupby('Tipo')['ValFormat'].sum()
     fig1, ax1 = plt.subplots()
     tipo_group.plot.pie(autopct='%1.1f%%', ax=ax1)
     ax1.set_ylabel('')
